@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>실시간 손 관절 인식 및 좌표 추출</title>
+  <!-- MediaPipe Hands & Camera Utils CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background-color: #121212;
+      color: #e0e0e0;
+    }
+    .container {
+      display: flex;
+      gap: 20px;
+      width: 100%;
+      max-width: 1200px;
+    }
+    .video-box {
+      position: relative;
+      flex: 1;
+      aspect-ratio: 4 / 3;
+      background: #000;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    video {
+      display: none; /* 캔버스에 직접 그리므로 비디오 태그는 숨김 처리 */
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      transform: scaleX(-1); /* 거울 모드 */
+    }
+    .output-box {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #1e1e1e;
+      border-radius: 8px;
+      padding: 15px;
+      height: 480px;
+      box-sizing: border-box;
+    }
+    .output-box h3 {
+      margin-top: 0;
+      font-size: 16px;
+      color: #4caf50;
+    }
+    pre {
+      flex: 1;
+      background: #0d0d0d;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-y: auto;
+      font-size: 12px;
+      line-height: 1.4;
+      color: #00e676;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>손 관절 실시간 트래킹 & 랜드마크 벡터</h2>
+
+  <div class="container">
+    <!-- 영상 및 관절 렌더링 영역 -->
+    <div class="video-box">
+      <video id="webcam" playsinline></video>
+      <canvas id="output_canvas"></canvas>
+    </div>
+
+    <!-- 추출된 랜드마크 좌표 출력 영역 -->
+    <div class="output-box">
+      <h3 id="hand-status">손 인식 대기 중...</h3>
+      <pre id="vector-data">// 웹캠을 향해 손을 비추면 21개 관절 좌표(x, y, z)가 표시됩니다.</pre>
+    </div>
+  </div>
+
+  <script>
+    const videoElement = document.getElementById('webcam');
+    const canvasElement = document.getElementById('output_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const statusText = document.getElementById('hand-status');
+    const vectorData = document.getElementById('vector-data');
+
+    // 주요 관절 인덱스 이름 매핑
+    const landmarkNames = {
+      0: "Wrist (손목)",
+      4: "Thumb Tip (엄지 끝)",
+      8: "Index Tip (검지 끝)",
+      12: "Middle Tip (중지 끝)",
+      16: "Ring Tip (약지 끝)",
+      20: "Pinky Tip (새끼 끝)"
+    };
+
+    function onResults(results) {
+      // 캔버스 크기 동기화
+      canvasElement.width = videoElement.videoWidth;
+      canvasElement.height = videoElement.videoHeight;
+
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      // 웹캠 원본 이미지 렌더링
+      canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        statusText.innerText = `인식된 손 개수: ${results.multiHandLandmarks.length}`;
+        let outputString = "";
+
+        for (let handIndex = 0; handIndex < results.multiHandLandmarks.length; handIndex++) {
+          const landmarks = results.multiHandLandmarks[handIndex];
+
+          // 1. 관절 연결선 및 점 시각화
+          drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 4 });
+          drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', lineWidth: 2, radius: 4 });
+
+          // 2. 좌표 텍스트 포맷팅 (0.0 ~ 1.0 정규화된 3차원 벡터)
+          outputString += `[손 #${handIndex + 1}]\n`;
+          landmarks.forEach((pt, idx) => {
+            const name = landmarkNames[idx] ? ` (${landmarkNames[idx]})` : "";
+            outputString += `P${idx.toString().padStart(2, '0')}${name}: x=${pt.x.toFixed(3)}, y=${pt.y.toFixed(3)}, z=${pt.z.toFixed(3)}\n`;
+          });
+          outputString += "\n";
+        }
+        vectorData.textContent = outputString;
+      } else {
+        statusText.innerText = "손 인식 대기 중...";
+        vectorData.textContent = "// 손이 인식되지 않았습니다.";
+      }
+      canvasCtx.restore();
+    }
+
+    // MediaPipe Hands 초기화
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+
+    hands.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.6,
+      minTrackingConfidence: 0.6
+    });
+
+    hands.onResults(onResults);
+
+    // 웹캠 스트림 바인딩
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await hands.send({ image: videoElement });
+      },
+      width: 640,
+      height: 480
+    });
+
+    camera.start().catch((err) => {
+      statusText.innerText = "웹캠 시작 실패: " + err.message;
+    });
+  </script>
+</body>
+</html>
