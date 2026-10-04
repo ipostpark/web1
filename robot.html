@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>자동차 로봇 시뮬레이터</title>
+  <style>
+    /* ===== 기본 레이아웃 스타일 ===== */
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background-color: #f5f5f5;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 20px auto;
+      padding: 20px;
+      box-sizing: border-box;
+      background-color: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      margin: 0 0 10px 0;
+      font-size: 24px;
+    }
+
+    .description {
+      font-size: 14px;
+      color: #555555;
+      margin-bottom: 16px;
+      line-height: 1.4;
+    }
+
+    /* ===== 시뮬레이션 영역 ===== */
+    #sim-area {
+      position: relative;
+      width: 100%;
+      max-width: 800px;
+      height: 400px;
+      margin: 0 auto 16px auto;
+      border: 2px solid #cccccc;
+      border-radius: 10px;
+      background: repeating-linear-gradient(
+        45deg,
+        #fafafa,
+        #fafafa 10px,
+        #f0f0f0 10px,
+        #f0f0f0 20px
+      );
+      overflow: hidden;
+    }
+
+    /* ===== 자동차 로봇 모양 ===== */
+    #car {
+      position: absolute;
+      width: 60px;
+      height: 35px;
+      background-color: #1976d2;
+      border-radius: 8px;
+      box-shadow: 0 0 6px rgba(0, 0, 0, 0.3);
+      transform-origin: 50% 50%;
+      /* 가운데 정렬을 위한 translate(-50%, -50%) */
+      transform: translate(-50%, -50%) rotate(0deg);
+      /* 위치/회전 애니메이션 */
+      transition:
+        left 0.6s linear,
+        top 0.6s linear,
+        transform 0.6s linear;
+    }
+
+    /* 자동차 앞부분(헤드라이트 느낌) */
+    #car::before {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 24px;
+      height: 6px;
+      border-radius: 3px;
+      background-color: #ffeb3b;
+    }
+
+    /* ===== 입력 영역 ===== */
+    .command-area {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .command-input-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    #command-input {
+      flex: 1;
+      padding: 8px 10px;
+      font-size: 14px;
+      border-radius: 4px;
+      border: 1px solid #cccccc;
+      box-sizing: border-box;
+    }
+
+    #run-button,
+    #reset-button {
+      padding: 8px 12px;
+      font-size: 14px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      box-sizing: border-box;
+    }
+
+    #run-button {
+      background-color: #1976d2;
+      color: #ffffff;
+    }
+
+    #run-button:hover {
+      background-color: #1459a3;
+    }
+
+    #reset-button {
+      background-color: #e0e0e0;
+      color: #333333;
+    }
+
+    #reset-button:hover {
+      background-color: #cfcfcf;
+    }
+
+    .hint {
+      font-size: 13px;
+      color: #666666;
+      line-height: 1.4;
+    }
+
+    /* ===== 로그 영역 ===== */
+    #log {
+      margin-top: 12px;
+      padding: 8px;
+      border-radius: 4px;
+      background-color: #fafafa;
+      border: 1px solid #e0e0e0;
+      max-height: 180px;
+      overflow-y: auto;
+      font-size: 13px;
+    }
+
+    .log-entry {
+      margin: 2px 0;
+      white-space: pre-line;
+    }
+
+    .log-entry.info {
+      color: #333333;
+    }
+
+    .log-entry.error {
+      color: #c62828;
+    }
+
+    .log-entry.system {
+      color: #2e7d32;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>자동차 로봇 시뮬레이터</h1>
+    <div class="description">
+      한국어 명령을 입력하면 자동차 로봇이 명령에 따라 움직입니다.<br>
+      예시: "앞으로 50 이동", "왼쪽으로 90도 회전", "오른쪽으로 살짝 회전", "뒤로 30 움직여"
+    </div>
+
+    <!-- 자동차가 움직일 시뮬레이션 영역 -->
+    <div id="sim-area">
+      <div id="car"></div>
+    </div>
+
+    <!-- 명령 입력 및 로그 영역 -->
+    <div class="command-area">
+      <div class="command-input-row">
+        <input
+          id="command-input"
+          type="text"
+          placeholder="예: 앞으로 50 이동 / 왼쪽으로 90도 회전 / 뒤로 30 움직여 / 오른쪽으로 살짝 회전"
+        >
+        <button id="run-button">실행</button>
+        <button id="reset-button">초기화</button>
+      </div>
+      <div class="hint">
+        명령 규칙:<br>
+        • "앞으로", "뒤로", "전진", "후진" → y축 기준 전진/후진 이동 (px)<br>
+        • "왼쪽", "오른쪽", "좌회전", "우회전" → 회전 (도)<br>
+        • 숫자가 포함되면 거리(px) 또는 각도로 해석<br>
+        • 숫자가 없고 회전 명령만 있으면 기본 45도, "살짝"이 포함되면 15도로 회전<br>
+        • 숫자가 없고 이동 명령만 있으면 기본 50px 이동
+      </div>
+      <div id="log"></div>
+    </div>
+  </div>
+
+  <script>
+    // ==============================
+    //   기본 엘리먼트 및 상태 설정
+    // ==============================
+    const simArea = document.getElementById("sim-area");
+    const car = document.getElementById("car");
+    const commandInput = document.getElementById("command-input");
+    const runButton = document.getElementById("run-button");
+    const resetButton = document.getElementById("reset-button");
+    const logBox = document.getElementById("log");
+
+    // 자동차 상태: 중심 좌표 (x, y), 각도(angle, 도 단위)
+    const carState = {
+      x: 0,
+      y: 0,
+      angle: 0  // 0도는 화면 상단(위쪽)을 바라보는 방향으로 가정
+    };
+
+    // ==============================
+    //   로그 출력 함수
+    // ==============================
+    function addLog(message, type = "info") {
+      const div = document.createElement("div");
+      div.className = "log-entry " + type;
+      div.textContent = message;
+      logBox.appendChild(div);
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    // ==============================
+    //   자동차 초기 위치 설정
+    // ==============================
+    function initCarPosition() {
+      const areaRect = simArea.getBoundingClientRect();
+
+      // 시뮬레이션 영역의 가운데를 기본 위치로 사용
+      carState.x = areaRect.width / 2;
+      carState.y = areaRect.height / 2;
+      carState.angle = 0;
+
+      // transition 없이 바로 위치시키기
+      const prevTransition = car.style.transition;
+      car.style.transition = "none";
+      car.style.left = carState.x + "px";
+      car.style.top = carState.y + "px";
+      car.style.transform = "translate(-50%, -50%) rotate(" + carState.angle + "deg)";
+      // 강제 리플로우 후 원래 transition 복귀
+      car.offsetHeight;
+      car.style.transition = prevTransition || "left 0.6s linear, top 0.6s linear, transform 0.6s linear";
+
+      addLog("자동차 위치와 방향이 초기화되었습니다.", "system");
+    }
+
+    // ==============================
+    //   자동차 위치/각도 업데이트
+    // ==============================
+    function updateCarTransform() {
+      car.style.left = carState.x + "px";
+      car.style.top = carState.y + "px";
+      car.style.transform = "translate(-50%, -50%) rotate(" + carState.angle + "deg)";
+    }
+
+    // ==============================
+    //   명령 처리 함수
+    // ==============================
+    function handleCommand(rawCommand) {
+      const text = rawCommand.trim();
+      if (!text) {
+        addLog("명령이 비어 있습니다.", "error");
+        return;
+      }
+
+      addLog("입력: " + text, "info");
+
+      // 공백 제거한 버전 (키워드 검색 용도)
+      const compact = text.replace(/\s+/g, "").toLowerCase();
+
+      // 숫자 추출 (맨 처음 등장하는 숫자 사용)
+      const numMatch = compact.match(/(\d+)/);
+      let value = numMatch ? parseFloat(numMatch[1]) : null;
+
+      // 이동 관련 키워드
+      const isForward =
+        compact.includes("앞으로") ||
+        compact.includes("전진");
+
+      const isBackward =
+        compact.includes("뒤로") ||
+        compact.includes("후진");
+
+      // 회전 관련 키워드
+      const isLeftTurn =
+        compact.includes("왼쪽") ||
+        compact.includes("좌회전");
+
+      const isRightTurn =
+        compact.includes("오른쪽") ||
+        compact.includes("우회전");
+
+      // "살짝" 키워드 여부 (회전 기본각에 사용)
+      const hasSlight = compact.includes("살짝");
+
+      const hasMove = isForward || isBackward;
+      const hasTurn = isLeftTurn || isRightTurn;
+
+      if (!hasMove && !hasTurn) {
+        addLog("이해할 수 없는 명령입니다. 예: \"앞으로 50 이동\", \"왼쪽으로 90도 회전\"", "error");
+        return;
+      }
+
+      // 이동과 회전이 동시에 들어온 경우는 현재 버전에서 지원하지 않음
+      if (hasMove && hasTurn) {
+        addLog("이동과 회전이 동시에 포함된 명령은 한 번에 하나씩만 입력해 주세요.", "error");
+        return;
+      }
+
+      if (hasMove) {
+        executeMove(isForward, isBackward, value, text);
+      } else if (hasTurn) {
+        executeTurn(isLeftTurn, isRightTurn, value, hasSlight, text);
+      }
+    }
+
+    // ==============================
+    //   이동 실행 함수
+    // ==============================
+    function executeMove(isForward, isBackward, value, originalCommand) {
+      // 숫자가 없으면 기본 이동 거리 50px
+      const defaultMove = 50;
+      let distance = (value !== null ? value : defaultMove);
+      distance = Math.abs(distance);
+
+      if (isBackward) {
+        distance = -distance;
+      }
+
+      // 현재 각도에 따른 이동 방향 계산
+      const rad = (carState.angle * Math.PI) / 180;
+      // 0도는 위쪽이므로 sin/cos를 다음과 같이 사용
+      const dx = distance * Math.sin(rad);
+      const dy = -distance * Math.cos(rad);
+
+      const areaRect = simArea.getBoundingClientRect();
+      const carWidth = car.offsetWidth;
+      const carHeight = car.offsetHeight;
+
+      const halfW = carWidth / 2;
+      const halfH = carHeight / 2;
+
+      // 새로운 위치 계산
+      let newX = carState.x + dx;
+      let newY = carState.y + dy;
+
+      // 경계 체크 (자동차가 영역 밖으로 나가지 않도록 제한)
+      if (newX < halfW) newX = halfW;
+      if (newX > areaRect.width - halfW) newX = areaRect.width - halfW;
+      if (newY < halfH) newY = halfH;
+      if (newY > areaRect.height - halfH) newY = areaRect.height - halfH;
+
+      // 이동 거리 크기에 따라 애니메이션 시간 조정 (최소 0.3초 ~ 최대 2초)
+      const absDist = Math.abs(distance);
+      const baseDuration = 0.3;
+      const extra = Math.min(absDist / 200, 1.7);
+      const duration = baseDuration + extra;
+
+      car.style.transition =
+        "left " + duration.toFixed(2) + "s ease-out, " +
+        "top " + duration.toFixed(2) + "s ease-out, " +
+        "transform " + duration.toFixed(2) + "s linear";
+
+      // 상태 반영
+      carState.x = newX;
+      carState.y = newY;
+      updateCarTransform();
+
+      addLog(
+        "이동: " +
+          (isForward ? "앞으로 " : "뒤로 ") +
+          Math.abs(distance) +
+          "px (명령: " + originalCommand + ")",
+        "system"
+      );
+    }
+
+    // ==============================
+    //   회전 실행 함수
+    // ==============================
+    function executeTurn(isLeftTurn, isRightTurn, value, hasSlight, originalCommand) {
+      // 숫자가 없으면 기본 회전 각도 사용
+      // "살짝" 포함 시 15도, 그렇지 않으면 45도
+      const defaultTurn = hasSlight ? 15 : 45;
+      let angleDelta = (value !== null ? value : defaultTurn);
+      angleDelta = Math.abs(angleDelta);
+
+      if (isLeftTurn) {
+        angleDelta = -angleDelta;  // 왼쪽(좌회전)은 음수 방향
+      } else if (isRightTurn) {
+        angleDelta = angleDelta;   // 오른쪽(우회전)은 양수 방향
+      }
+
+      // 회전 각도에 따라 애니메이션 시간 조정 (최소 0.3초 ~ 최대 1.5초)
+      const baseDuration = 0.3;
+      const extra = Math.min(Math.abs(angleDelta) / 90, 1.2);
+      const duration = baseDuration + extra;
+
+      car.style.transition =
+        "left " + duration.toFixed(2) + "s linear, " +
+        "top " + duration.toFixed(2) + "s linear, " +
+        "transform " + duration.toFixed(2) + "s linear";
+
+      // 각도 상태 업데이트
+      carState.angle += angleDelta;
+      // 보기 좋게 0~360 범위로 정리 (필수는 아님)
+      carState.angle = ((carState.angle % 360) + 360) % 360;
+
+      updateCarTransform();
+
+      addLog(
+        "회전: " +
+          (isLeftTurn ? "왼쪽 " : "오른쪽 ") +
+          Math.abs(angleDelta) +
+          "도 (명령: " + originalCommand + ")",
+        "system"
+      );
+    }
+
+    // ==============================
+    //   시뮬레이터 초기화
+    // ==============================
+    function resetSimulation() {
+      initCarPosition();
+      addLog("시뮬레이터가 초기화되었습니다.", "system");
+    }
+
+    // ==============================
+    //   이벤트 바인딩
+    // ==============================
+    window.addEventListener("load", () => {
+      initCarPosition();
+      addLog("명령을 입력한 뒤 [실행] 버튼을 누르거나 Enter 키를 눌러 보세요.", "system");
+      commandInput.focus();
+    });
+
+    runButton.addEventListener("click", () => {
+      handleCommand(commandInput.value);
+      commandInput.value = "";
+      commandInput.focus();
+    });
+
+    resetButton.addEventListener("click", () => {
+      resetSimulation();
+      commandInput.focus();
+    });
+
+    commandInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        handleCommand(commandInput.value);
+        commandInput.value = "";
+      }
+    });
+  </script>
+</body>
+</html>
