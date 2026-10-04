@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>박광렬의 웹 페이지 뷰어 대시보드</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      display: flex;
+      height: 100vh;
+      background-color: #f1f5f9;
+      color: #1e293b;
+      overflow: hidden;
+    }
+
+    /* 1. 왼쪽 대시보드 레이아웃 */
+    #sidebar {
+      width: 280px;
+      min-width: 280px;
+      background-color: #ffffff;
+      border-right: 1px solid #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 2px 0 8px rgba(0, 0, 0, 0.04);
+      z-index: 10;
+    }
+
+    .sidebar-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .sidebar-header h2 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    /* 2. <추가> 아이콘 버튼 */
+    .btn-add {
+      background-color: #3b82f6;
+      color: #ffffff;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: background-color 0.2s;
+    }
+
+    .btn-add:hover {
+      background-color: #2563eb;
+    }
+
+    /* 버튼 리스트 영역 */
+    #button-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* 3. 리스트 아이템: 버튼 + 속성 아이콘 */
+    .app-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 6px 8px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .app-item.active {
+      border-color: #3b82f6;
+      background-color: #eff6ff;
+    }
+
+    /* 실행 버튼 (라벨) */
+    .app-btn {
+      flex: 1;
+      text-align: left;
+      background: none;
+      border: none;
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: #334155;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding: 4px 6px;
+    }
+
+    .app-item.active .app-btn {
+      color: #1d4ed8;
+      font-weight: 600;
+    }
+
+    /* 한 글자 크기의 속성(⚙) 아이콘 버튼 */
+    .btn-settings {
+      background: none;
+      border: none;
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 4px;
+      line-height: 1;
+      border-radius: 4px;
+      color: #64748b;
+      transition: background-color 0.2s, color 0.2s;
+    }
+
+    .btn-settings:hover {
+      background-color: #e2e8f0;
+      color: #0f172a;
+    }
+
+    /* 1. 오른쪽 메인 웹 뷰어 레이아웃 */
+    #main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      background-color: #ffffff;
+    }
+
+    #web-frame {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+    }
+
+    /* 6. 파일이 없거나 초기 상태 안내 문구 오버레이 */
+    #fallback-view {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #f8fafc;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #64748b;
+      z-index: 5;
+    }
+
+    #fallback-view .icon {
+      font-size: 3rem;
+      margin-bottom: 12px;
+    }
+
+    #fallback-view .message {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #475569;
+    }
+
+    #fallback-view .sub-message {
+      font-size: 0.9rem;
+      color: #94a3b8;
+      margin-top: 6px;
+    }
+
+    /* 4. 속성 모달 레이아웃 */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(15, 23, 42, 0.4);
+      backdrop-filter: blur(2px);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-backdrop.show {
+      display: flex;
+    }
+
+    .modal-card {
+      background: #ffffff;
+      width: 360px;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+      overflow: hidden;
+    }
+
+    .modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 1.05rem;
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-body {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-group label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #475569;
+    }
+
+    .form-group input {
+      padding: 8px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .form-group input:focus {
+      border-color: #3b82f6;
+    }
+
+    /* 순서 변경 및 삭제 컨트롤 */
+    .order-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 4px;
+      padding-top: 10px;
+      border-top: 1px solid #f1f5f9;
+    }
+
+    .order-btn {
+      flex: 1;
+      padding: 6px 0;
+      background-color: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    .order-btn:hover {
+      background-color: #e2e8f0;
+    }
+
+    .delete-btn {
+      padding: 6px 12px;
+      background-color: #fee2e2;
+      border: 1px solid #fecaca;
+      color: #dc2626;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    .delete-btn:hover {
+      background-color: #fecaca;
+    }
+
+    .modal-footer {
+      padding: 12px 20px;
+      background-color: #f8fafc;
+      border-top: 1px solid #f1f5f9;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .btn-action {
+      padding: 7px 14px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-cancel {
+      background-color: #e2e8f0;
+      color: #475569;
+    }
+
+    .btn-confirm {
+      background-color: #3b82f6;
+      color: #ffffff;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 왼쪽 대시보드 -->
+  <aside id="sidebar">
+    <div class="sidebar-header">
+      <h2>박광렬의 HTML 뷰어</h2>
+      <button class="btn-add" id="btnAddApp" title="새 버튼 추가">
+        <span>+</span> 추가
+      </button>
+    </div>
+    <div id="button-list"></div>
+  </aside>
+
+  <!-- 오른쪽 웹 뷰어 -->
+  <main id="main-content">
+    <iframe id="web-frame" src="about:blank"></iframe>
+    
+    <!-- 6. 파일 없음 안내 화면 -->
+    <div id="fallback-view">
+      <div class="icon">📁</div>
+      <div class="message" id="fallback-msg">파일 없음</div>
+      <div class="sub-message" id="fallback-detail">지정된 HTML 파일을 찾을 수 없습니다.</div>
+    </div>
+  </main>
+
+  <!-- 4. 속성 모달 창 -->
+  <div class="modal-backdrop" id="settingsModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <span>버튼 속성 설정</span>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="inputLabel">버튼 이름 (Label)</label>
+          <input type="text" id="inputLabel" placeholder="예: 시계 위젯">
+        </div>
+        <div class="form-group">
+          <label for="inputFilename">파일 이름 (파일명.html)</label>
+          <input type="text" id="inputFilename" placeholder="예: clock.html">
+        </div>
+
+        <!-- 3. 버튼 순서 변경 컨트롤 -->
+        <div class="form-group">
+          <label>순서 변경 및 관리</label>
+          <div class="order-controls">
+            <button class="order-btn" id="btnMoveUp">▲ 위로</button>
+            <button class="order-btn" id="btnMoveDown">▼ 아래로</button>
+            <button class="delete-btn" id="btnDeleteItem">삭제</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-action btn-cancel" id="btnCancelModal">취소</button>
+        <button class="btn-action btn-confirm" id="btnConfirmModal">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 기본 데이터 정의 (로컬 스토리지에 데이터가 없을 때 초기값)
+    const DEFAULT_ITEMS = [
+      { id: '1', label: '샘플 앱 1', filename: 'sample1.html' },
+      { id: '2', label: '샘플 앱 2', filename: 'sample2.html' }
+    ];
+
+    // 상태 관리
+    let items = JSON.parse(localStorage.getItem('vibe_apps')) || DEFAULT_ITEMS;
+    let editingIndex = null;
+    let activeId = null;
+
+    // DOM 요소
+    const buttonListEl = document.getElementById('button-list');
+    const btnAddApp = document.getElementById('btnAddApp');
+    const webFrame = document.getElementById('web-frame');
+    const fallbackView = document.getElementById('fallback-view');
+    const fallbackMsg = document.getElementById('fallback-msg');
+    const fallbackDetail = document.getElementById('fallback-detail');
+
+    // 모달 DOM 요소
+    const modal = document.getElementById('settingsModal');
+    const inputLabel = document.getElementById('inputLabel');
+    const inputFilename = document.getElementById('inputFilename');
+    const btnMoveUp = document.getElementById('btnMoveUp');
+    const btnMoveDown = document.getElementById('btnMoveDown');
+    const btnDeleteItem = document.getElementById('btnDeleteItem');
+    const btnCancelModal = document.getElementById('btnCancelModal');
+    const btnConfirmModal = document.getElementById('btnConfirmModal');
+
+    // 데이터 저장
+    function saveItems() {
+      localStorage.setItem('vibe_apps', JSON.stringify(items));
+    }
+
+    // 화면 렌더링
+    function renderList() {
+      buttonListEl.innerHTML = '';
+
+      items.forEach((item, index) => {
+        const itemContainer = document.createElement('div');
+        itemContainer.className = `app-item ${item.id === activeId ? 'active' : ''}`;
+
+        // 실행 버튼
+        const runBtn = document.createElement('button');
+        runBtn.className = 'app-btn';
+        runBtn.textContent = item.label || '이름 없음';
+        runBtn.title = `${item.label} (${item.filename})`;
+        runBtn.onclick = () => loadApp(item);
+
+        // 한 글자 크기의 속성(⚙) 아이콘
+        const settingsBtn = document.createElement('button');
+        settingsBtn.className = 'btn-settings';
+        settingsBtn.innerHTML = '⚙';
+        settingsBtn.title = '속성 및 순서 변경';
+        settingsBtn.onclick = (e) => {
+          e.stopPropagation();
+          openSettingsModal(index);
+        };
+
+        itemContainer.appendChild(runBtn);
+        itemContainer.appendChild(settingsBtn);
+        buttonListEl.appendChild(itemContainer);
+      });
+    }
+
+    // 5 & 6. 웹 페이지 실행 및 파일 유무 검증
+    async function loadApp(item) {
+      activeId = item.id;
+      renderList();
+
+      if (!item.filename || item.filename.trim() === '') {
+        showFallback('파일 없음', '설정된 파일명이 없습니다.');
+        return;
+      }
+
+      const filePath = item.filename.trim();
+
+      try {
+        // HEAD 요청으로 해당 파일이 폴더(서버 경로) 내에 존재하는지 사전 체크
+        const response = await fetch(filePath, { method: 'HEAD' });
+        
+        if (response.ok) {
+          fallbackView.style.display = 'none';
+          webFrame.style.display = 'block';
+          webFrame.src = filePath;
+        } else {
+          showFallback('파일 없음', `'${filePath}' 파일을 찾을 수 없습니다. (HTTP ${response.status})`);
+        }
+      } catch (err) {
+        // file:// 프로토콜로 직접 실행했거나 CORS/네트워크 오류 발생 시
+        // iframe 로드를 직접 시도하고 iframe 에러 이벤트 처리
+        fallbackView.style.display = 'none';
+        webFrame.style.display = 'block';
+        webFrame.src = filePath;
+
+        webFrame.onerror = () => {
+          showFallback('파일 없음', `'${filePath}' 파일을 열 수 없습니다.`);
+        };
+      }
+    }
+
+    function showFallback(title, detail) {
+      webFrame.src = 'about:blank';
+      webFrame.style.display = 'none';
+      fallbackMsg.textContent = title;
+      fallbackDetail.textContent = detail;
+      fallbackView.style.display = 'flex';
+    }
+
+    // 모달 열기
+    function openSettingsModal(index) {
+      editingIndex = index;
+      const currentItem = items[index];
+
+      inputLabel.value = currentItem.label;
+      inputFilename.value = currentItem.filename;
+
+      // 순서 이동 버튼 활성화 여부
+      btnMoveUp.disabled = index === 0;
+      btnMoveDown.disabled = index === items.length - 1;
+      btnMoveUp.style.opacity = index === 0 ? '0.5' : '1';
+      btnMoveDown.style.opacity = index === items.length - 1 ? '0.5' : '1';
+
+      modal.classList.add('show');
+      inputLabel.focus();
+    }
+
+    // 모달 닫기
+    function closeModal() {
+      modal.classList.remove('show');
+      editingIndex = null;
+    }
+
+    // 2. <추가> 버튼 클릭
+    btnAddApp.addEventListener('click', () => {
+      const newItem = {
+        id: Date.now().toString(),
+        label: `새 파일(html) ${items.length + 1}`,
+        filename: ''
+      };
+      items.push(newItem);
+      saveItems();
+      renderList();
+      // 추가 직후 바로 속성을 편집할 수 있도록 모달 오픈
+      openSettingsModal(items.length - 1);
+    });
+
+    // 4. 모달 확인 버튼 (수정 완료)
+    btnConfirmModal.addEventListener('click', () => {
+      if (editingIndex !== null) {
+        items[editingIndex].label = inputLabel.value.trim() || '이름 없음';
+        items[editingIndex].filename = inputFilename.value.trim();
+        saveItems();
+        renderList();
+
+        // 현재 보고 있던 파일의 이름을 바꾼 경우 다시 로드
+        if (items[editingIndex].id === activeId) {
+          loadApp(items[editingIndex]);
+        }
+      }
+      closeModal();
+    });
+
+    // 모달 취소 버튼
+    btnCancelModal.addEventListener('click', closeModal);
+
+    // 3. 순서 위로 이동 (버튼 + 속성 아이콘이 함께 이동)
+    btnMoveUp.addEventListener('click', () => {
+      if (editingIndex !== null && editingIndex > 0) {
+        const temp = items[editingIndex];
+        items[editingIndex] = items[editingIndex - 1];
+        items[editingIndex - 1] = temp;
+        editingIndex -= 1;
+        saveItems();
+        renderList();
+        openSettingsModal(editingIndex);
+      }
+    });
+
+    // 3. 순서 아래로 이동 (버튼 + 속성 아이콘이 함께 이동)
+    btnMoveDown.addEventListener('click', () => {
+      if (editingIndex !== null && editingIndex < items.length - 1) {
+        const temp = items[editingIndex];
+        items[editingIndex] = items[editingIndex + 1];
+        items[editingIndex + 1] = temp;
+        editingIndex += 1;
+        saveItems();
+        renderList();
+        openSettingsModal(editingIndex);
+      }
+    });
+
+    // 항목 삭제
+    btnDeleteItem.addEventListener('click', () => {
+      if (editingIndex !== null) {
+        if (confirm('이 버튼을 목록에서 삭제하시겠습니까?')) {
+          if (items[editingIndex].id === activeId) {
+            showFallback('선택된 앱 없음', '대시보드에서 실행할 앱을 선택해주세요.');
+          }
+          items.splice(editingIndex, 1);
+          saveItems();
+          renderList();
+          closeModal();
+        }
+      }
+    });
+
+    // 초기 실행
+    renderList();
+    if (items.length > 0) {
+      loadApp(items[0]);
+    } else {
+      showFallback('실행할 앱 없음', '<추가> 버튼을 눌러 새 앱을 등록하세요.');
+    }
+  </script>
+</body>
+</html>
